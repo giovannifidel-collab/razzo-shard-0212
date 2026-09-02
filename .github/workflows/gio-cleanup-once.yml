@@ -1,0 +1,31 @@
+name: GIO Cleanup Once
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/gio-cleanup-once.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Cancel audited obsolete GIO pack05 run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id=33650455510
+          state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')"
+          echo "BEFORE=$state"
+          if [ "$state" != completed ]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
+          fi
+          for n in 1 2 3 4 5 6; do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')"
+            echo "VERIFY=$state"
+            [ "$state" = completed ] && exit 0
+            sleep 5
+          done
+          exit 1
