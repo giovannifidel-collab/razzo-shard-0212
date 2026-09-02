@@ -8,24 +8,30 @@ permissions:
   contents: read
 jobs:
   cancel:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 3
     steps:
-      - name: Cancel audited obsolete GIO pack05 run
+      - name: Cancel audited GIO pack05 and superseded cleanup
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          id=33650455510
-          state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')"
-          echo "BEFORE=$state"
-          if [ "$state" != completed ]; then
-            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
-          fi
-          for n in 1 2 3 4 5 6; do
+          cancel_one() {
+            id="$1"
             state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')"
-            echo "VERIFY=$state"
-            [ "$state" = completed ] && exit 0
-            sleep 5
+            echo "BEFORE $id $state"
+            if [ "$state" != completed ]; then
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
+            fi
+          }
+          cancel_one 33650455510
+          cancel_one 33659203470
+          for id in 33650455510 33659203470; do
+            for n in 1 2 3 4 5 6; do
+              state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')"
+              echo "VERIFY $id $state"
+              [ "$state" = completed ] && break
+              sleep 5
+            done
+            test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')" = completed
           done
-          exit 1
